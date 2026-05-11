@@ -1,8 +1,64 @@
-import requests
+import os
 import json
+import time
+import base64
+import hashlib
+import hmac
+import requests
+from urllib.parse import urlencode
+from dotenv import load_dotenv
+
+load_dotenv()
+
+API_KEY = os.getenv("KRAKEN_API_KEY")
+API_SECRET = os.getenv("KRAKEN_API_SECRET")
 
 BASE_URL = "https://futures.kraken.com/derivatives/api/v3"
 
+# =========================
+# AUTH HELPERS
+# =========================
+
+def generate_signature(endpoint, data="", nonce=""):
+
+    postdata = urlencode(data) if isinstance(data, dict) else data
+    message = postdata + nonce + endpoint
+
+    sha256_hash = hashlib.sha256(message.encode()).digest()
+    secret = base64.b64decode(API_SECRET)
+
+    signature = hmac.new(secret, sha256_hash, hashlib.sha512).digest()
+
+    return base64.b64encode(signature).decode()
+
+
+def private_request(method, endpoint, data=None):
+
+    if data is None:
+        data = {}
+
+    nonce = str(int(time.time() * 1000))
+    signature = generate_signature(endpoint, data, nonce)
+
+    headers = {
+        "APIKey": API_KEY,
+        "Authent": signature,
+        "Nonce": nonce
+    }
+
+    url = BASE_URL + endpoint
+
+    try:
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=data, timeout=10)
+        else:
+            response = requests.post(url, headers=headers, data=data, timeout=10)
+
+        return response.json()
+
+    except Exception as e:
+        print(f"[ERROR private_request] {e}")
+        return None
 
 def get_ticker(symbol="PF_DOGEUSD"):
     """
@@ -38,3 +94,27 @@ def get_ticker(symbol="PF_DOGEUSD"):
         print(f"[ERROR get_ticker] {e}")
 
     return None
+
+def get_account_balance():
+    endpoint = "/accounts"
+    return private_request("GET", endpoint)
+
+def get_open_positions():
+    endpoint = "/openpositions"
+    return private_request("GET", endpoint)
+
+def get_open_orders():
+    endpoint = "/openorders"
+    return private_request("GET", endpoint)
+
+def place_market_order(symbol="PF_DOGEUSD", side="buy", size=10):
+    endpoint = "/sendorder"
+
+    data = {
+        "orderType": "mkt",
+        "symbol": symbol,
+        "side": side,
+        "size": size
+    }
+
+    return private_request("POST", endpoint, data)
