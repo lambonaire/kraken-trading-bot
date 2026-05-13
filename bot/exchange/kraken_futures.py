@@ -15,22 +15,25 @@ API_SECRET = os.getenv("KRAKEN_API_SECRET")
 
 BASE_URL = "https://futures.kraken.com/derivatives/api/v3"
 
+
 # =========================
-# AUTH HELPERS
+# AUTH
 # =========================
 
-def generate_signature(endpoint, data="", nonce=""):
 
-    postdata = urlencode(data) if isinstance(data, dict) else data
-    message = postdata + nonce + endpoint
+def generate_signature(endpoint, data, nonce):
 
-    sha256_hash = hashlib.sha256(message.encode()).digest()
+    postdata = urlencode(data) if isinstance(data, dict) else ""
+
+    encoded = (postdata + nonce + endpoint).encode()
+
+    message = hashlib.sha256(encoded).digest()
+
     secret = base64.b64decode(API_SECRET)
 
-    signature = hmac.new(secret, sha256_hash, hashlib.sha512).digest()
+    signature = hmac.new(secret, message, hashlib.sha512)
 
-    return base64.b64encode(signature).decode()
-
+    return base64.b64encode(signature.digest()).decode()
 
 def private_request(method, endpoint, data=None):
 
@@ -38,6 +41,7 @@ def private_request(method, endpoint, data=None):
         data = {}
 
     nonce = str(int(time.time() * 1000))
+
     signature = generate_signature(endpoint, data, nonce)
 
     headers = {
@@ -49,10 +53,22 @@ def private_request(method, endpoint, data=None):
     url = BASE_URL + endpoint
 
     try:
+
         if method == "GET":
-            response = requests.get(url, headers=headers, params=data, timeout=10)
+            response = requests.get(
+                url,
+                headers=headers,
+                params=data,
+                timeout=10
+            )
+
         else:
-            response = requests.post(url, headers=headers, data=data, timeout=10)
+            response = requests.post(
+                url,
+                headers=headers,
+                data=data,
+                timeout=10
+            )
 
         return response.json()
 
@@ -60,23 +76,18 @@ def private_request(method, endpoint, data=None):
         print(f"[ERROR private_request] {e}")
         return None
 
-def get_ticker(symbol="PF_DOGEUSD"):
-    """
-    Haalt markPrice of last price op van Kraken Futures.
-    Robuust voor verschillende API response formats.
-    """
+# =========================
+# PUBLIC
+# =========================
 
+def get_ticker(symbol="PF_DOGEUSD"):
     url = f"{BASE_URL}/tickers"
 
     try:
         response = requests.get(url, timeout=5)
-        response.raise_for_status()
         data = response.json()
 
-        # 🔥 Soms is het een dict met "tickers"
         tickers = data.get("tickers")
-
-        # 🔥 Soms is het direct een list
         if tickers is None:
             tickers = data if isinstance(data, list) else []
 
@@ -85,31 +96,28 @@ def get_ticker(symbol="PF_DOGEUSD"):
 
             if sym == symbol or (sym and "DOGE" in sym):
                 price = t.get("markPrice") or t.get("last")
-
-                print(json.dumps(t, indent=2))
-
-                return float(price) if price is not None else None
+                return float(price) if price else None
 
     except Exception as e:
         print(f"[ERROR get_ticker] {e}")
 
     return None
 
+
+# =========================
+# PRIVATE WRAPPERS
+# =========================
+
 def get_account_balance():
-    endpoint = "/accounts"
-    return private_request("GET", endpoint)
+    return private_request("GET", "/accounts")
 
 def get_open_positions():
-    endpoint = "/openpositions"
-    return private_request("GET", endpoint)
+    return private_request("GET", "/positions")
 
 def get_open_orders():
-    endpoint = "/openorders"
-    return private_request("GET", endpoint)
+    return private_request("GET", "/orders")
 
 def place_market_order(symbol="PF_DOGEUSD", side="buy", size=10):
-    endpoint = "/sendorder"
-
     data = {
         "orderType": "mkt",
         "symbol": symbol,
@@ -117,4 +125,4 @@ def place_market_order(symbol="PF_DOGEUSD", side="buy", size=10):
         "size": size
     }
 
-    return private_request("POST", endpoint, data)
+    return private_request("POST", "/sendorder", data)
