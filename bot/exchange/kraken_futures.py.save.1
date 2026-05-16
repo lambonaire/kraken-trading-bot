@@ -13,53 +13,50 @@ load_dotenv()
 API_KEY = os.getenv("KRAKEN_API_KEY")
 API_SECRET = os.getenv("KRAKEN_API_SECRET")
 
+BASE_URL = "https://futures.kraken.com/derivatives/api/v3"
+
 
 # =========================
 # AUTH
 # =========================
 
+def generate_signature(endpoint, data="", nonce=""):
+    postdata = urlencode(data) if isinstance(data, dict) else data
+    message = postdata + nonce + endpoint
 
+    sha256_hash = hashlib.sha256(message.encode()).digest()
+    secret = base64.b64decode(API_SECRET.strip())
 
-
-BASE_URL = "https://futures.kraken.com"
-ENDPOINT = "/derivatives/api/v3/accounts"
-
-def generate_signature(endpoint_path, postdata, nonce):
-    message = (postdata + nonce + endpoint_path).encode()
-    sha256_hash = hashlib.sha256(message).digest()
-    secret = base64.b64decode(API_SECRET)
     signature = hmac.new(secret, sha256_hash, hashlib.sha512).digest()
     return base64.b64encode(signature).decode()
+
 
 def private_request(method, endpoint, data=None):
     if data is None:
         data = {}
 
     nonce = str(int(time.time() * 1000))
-    postdata = urlencode(data) if data else ""
-
-    sign_path = endpoint.replace("/derivatives", "")
-    signature = generate_signature(sign_path, postdata, nonce)
+    signature = generate_signature(endpoint, data, nonce)
 
     headers = {
         "APIKey": API_KEY,
         "Authent": signature,
-        "Nonce": nonce,
+        "Nonce": nonce
     }
 
     url = BASE_URL + endpoint
 
-    if method == "GET":
-        response = requests.get(url, headers=headers, params=data, timeout=10)
-    else:
-        response = requests.post(url, headers=headers, data=postdata, timeout=10)
+    try:
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=data, timeout=10)
+        else:
+            response = requests.post(url, headers=headers, data=data, timeout=10)
 
-    print(response.text)
-    return response.json()
+        return response.json()
 
-def get_account_balance():
-    return private_request("GET", ENDPOINT)
-
+    except Exception as e:
+        print(f"[ERROR private_request] {e}")
+        return None
 
 
 # =========================
@@ -94,19 +91,11 @@ def get_ticker(symbol="PF_DOGEUSD"):
 # PRIVATE WRAPPERS
 # =========================
 
-
 def get_account_balance():
-    res = private_request("GET", "/derivatives/api/v3/accounts")
-
-    print(json.dumps(res, indent=2))
-
-    return res
+    return private_request("GET", "/accounts")
 
 def get_open_positions():
     return private_request("GET", "/positions")
-
-def test_auth():
-    return private_request("GET", "/accounts")
 
 def get_open_orders():
     return private_request("GET", "/orders")
@@ -122,12 +111,11 @@ def place_market_order(symbol="PF_DOGEUSD", side="buy", size=10):
     return private_request("POST", "/sendorder", data)
 
 
-print("🔥 SCRIPT STARTED")
+# =========================
+# AUTH
+# =========================
 
-if __name__ == "__main__":
-    print("🔥 MAIN BLOCK RUNNING")
-    print(get_account_balance())
+def generate_signature(endpoint, data="", nonce=""):
+    postdata = urlencode(data) if isinstance(data, dict) else data
+    message = postdata + nonce + endpoint
 
-
-print("API KEY:", API_KEY)
-print("SECRET LENGTH:", len(API_SECRET))
