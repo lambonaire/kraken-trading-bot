@@ -1,9 +1,20 @@
 import time
 
 from bot.exchange.kraken_futures import build_snapshot
+
 from bot.state.store import StateStore
 
+from bot.strategy.ladders.loader import load_ladder
+from bot.strategy.basic_ladder import BasicLadderStrategy
+
 state_store = StateStore()
+
+config = load_ladder(
+    "bot/strategy/ladders/doge_ladder.yaml"
+)
+
+strategy = BasicLadderStrategy(config)
+
 
 def run_bot():
     print("🚀 Bot started...")
@@ -13,13 +24,24 @@ def run_bot():
             snapshot = build_snapshot()
 
             ticker = snapshot.get("ticker")
+            market_data = {
+                "price": ticker
+            }
             accounts = snapshot.get("accounts", {})
             positions = snapshot.get("positions", {})
             orders = snapshot.get("orders", {})
+            state = state_store.get()
 
             flex = accounts.get("accounts", {}).get("flex", {})
             open_positions = positions.get("openPositions", [])
             open_orders = orders.get("openOrders", [])
+            signal = strategy.on_tick(
+                market_data,
+                state
+            )
+
+            print("\nSIGNAL:")
+            print(signal)
 
             print("\n==============================")
             print("BOT LOOP")
