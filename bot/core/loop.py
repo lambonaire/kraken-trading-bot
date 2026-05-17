@@ -1,7 +1,9 @@
 import time
 
 from bot.exchange.kraken_futures import build_snapshot
+from bot.state.store import StateStore
 
+state_store = StateStore()
 
 def run_bot():
     print("🚀 Bot started...")
