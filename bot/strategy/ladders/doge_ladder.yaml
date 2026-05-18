@@ -1,28 +1,29 @@
 symbol: PF_DOGEUSD
+max_level: 4
 
 base_entry:
-  margin_fraction: 0.004   # 0.4%
+  margin_fraction: 0.018   # 1.8%
 
 reentry:
   - level: 1
-    drop_pct: 0.008
-    size_multiplier: 1.0
-    take_profit_pct: 0.005   # +0.5%
+    drop_pct: 0.012
+    size_multiplier: 2.4
+    take_profit_pct: 0.004   # +0.4%
 
   - level: 2
-    drop_pct: 0.015
-    size_multiplier: 1.5
-    take_profit_pct: 0.0065  # +0.65%
+    drop_pct: 0.018
+    size_multiplier: 2.5
+    take_profit_pct: 0.003  # +0.3%
 
   - level: 3
-    drop_pct: 0.04
-    size_multiplier: 1.8
-    take_profit_pct: 0.008   # +0.8%
+    drop_pct: 0.048
+    size_multiplier: 2.2
+    take_profit_pct: 0.005   # +0.5%
 
   - level: 4
-    drop_pct: 0.06
+    drop_pct: 0.07
     size_multiplier: 2.2
-    take_profit_pct: 0.01    # +1.0%
+    take_profit_pct: 0.006    # +0.6%
 
 rules:
   exit_on_take_profit: true

@@ -147,6 +147,28 @@ def build_snapshot():
 
 
 # =========================
+# MARKET ORDER
+# =========================
+
+def place_market_order(symbol: str, side: str, size: float):
+
+    endpoint = "/derivatives/api/v3/sendorder"
+
+    data = {
+        "orderType": "mkt",
+        "symbol": symbol,
+        "side": side,
+        "size": size
+    }
+
+    return private_request(
+        "POST",
+        endpoint,
+        data
+    )
+
+
+# =========================
 # MAIN
 # =========================
 

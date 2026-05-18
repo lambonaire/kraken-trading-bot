@@ -1,4 +1,5 @@
 import time
+from bot.exchange.client import KrakenClient
 
 from bot.exchange.kraken_futures import build_snapshot
 
@@ -15,6 +16,7 @@ config = load_ladder(
 
 strategy = BasicLadderStrategy(config)
 
+exchange = KrakenClient()
 
 def run_bot():
     print("🚀 Bot started...")
