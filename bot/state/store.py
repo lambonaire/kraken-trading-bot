@@ -54,3 +54,9 @@ class StateStore:
     # -------------------------
     def clear_position(self):
         self.reset()
+
+state = {
+    "symbol": None,
+    "position_size": 0,
+    "entry_price": None,
+}

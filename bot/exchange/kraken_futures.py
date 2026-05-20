@@ -123,6 +123,19 @@ def get_ticker(symbol="PF_DOGEUSD"):
 def get_account_balance():
     return private_request("GET", ACCOUNTS_ENDPOINT)
 
+def get_open_position():
+    """
+    Geeft eerste open positie terug.
+    """
+
+    response = get_open_positions()
+
+    positions = response.get("openPositions", [])
+
+    if not positions:
+        return None
+
+    return positions[0]
 
 def get_open_positions():
     return private_request("GET", OPEN_POSITIONS_ENDPOINT)
