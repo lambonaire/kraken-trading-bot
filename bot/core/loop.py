@@ -13,15 +13,22 @@ from bot.execution.order_manager import OrderManager
 from bot.state.reconciliation import reconcile_orders
 
 
+# -------------------------
+# INIT
+# -------------------------
 state_store = StateStore()
 
 config = load_ladder("bot/strategy/ladders/doge_ladder.yaml")
 strategy = BasicLadderStrategy(config)
 
 exchange = KrakenClient()
+
 order_manager = OrderManager(exchange, state_store)
 
 
+# -------------------------
+# MAIN LOOP
+# -------------------------
 def run_bot():
     print("🚀 Bot started...")
 
@@ -58,18 +65,35 @@ def run_bot():
             # -------------------------
             state = state_store.get()
 
+            print("\n==============================")
+            print("CURRENT STATE")
+            print("==============================")
+            print(state)
+
             # -------------------------
             # STRATEGY
             # -------------------------
             signal = strategy.on_tick(market_data, state)
 
-            print("\nSIGNAL:")
+            print("\n==============================")
+            print("SIGNAL RAW")
+            print("==============================")
             print(signal)
+
+            if signal:
+                print("ACTION:", signal.get("action"))
+            else:
+                print("ACTION: NONE")
 
             # -------------------------
             # EXECUTION
             # -------------------------
-            order_manager.execute(signal, market_data)
+            result = order_manager.execute(signal, market_data)
+
+            print("\n==============================")
+            print("EXEC RESULT")
+            print("==============================")
+            print(result)
 
             # -------------------------
             # DEBUG OUTPUT
@@ -89,6 +113,7 @@ def run_bot():
 
             if open_positions:
                 print("\n--- POSITION DETAILS ---")
+
                 for pos in open_positions:
                     print(
                         f"Symbol: {pos.get('symbol')} | "
@@ -102,6 +127,7 @@ def run_bot():
 
             if open_orders:
                 print("\n--- ORDER DETAILS ---")
+
                 for order in open_orders:
                     print(
                         f"Symbol: {order.get('symbol')} | "
@@ -112,6 +138,6 @@ def run_bot():
                     )
 
         except Exception as e:
-            print(f"[ERROR loop] {e}")
+            print(f"\n[ERROR loop] {e}")
 
         time.sleep(2)

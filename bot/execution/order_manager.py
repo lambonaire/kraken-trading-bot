@@ -30,18 +30,38 @@ class OrderManager:
         balance = self.exchange.balance()
 
         available_margin = self._extract_available_margin(balance)
+
         if available_margin is None:
             raise ValueError("Could not extract available margin")
 
         price = float(market_data["price"])
 
         usd_size = available_margin * margin_fraction
-        size = usd_size / price
 
+        raw_size = usd_size / price
+
+        # Kraken Futures prefers integer contract sizes
+        size = int(raw_size)
+
+        print("AVAILABLE MARGIN:", available_margin)
+        print("USD SIZE:", usd_size)
+        print("RAW SIZE:", raw_size)
+        print("FINAL SIZE:", size)
+
+        if size <= 0:
+            raise ValueError("Calculated order size <= 0")
+
+        # -------------------------
+        # PLACE ORDER
+        # -------------------------
         order = self.exchange.buy_market(
             symbol=symbol,
             size=size
         )
+
+        print("ORDER RESPONSE:", order)
+
+
 
         order_id = self._extract_order_id(order)
 
@@ -71,7 +91,10 @@ class OrderManager:
             size=size
         )
 
+        print("TP RESPONSE:", order)
+
         order_id = self._extract_order_id(order)
+
         state["tp_order_id"] = order_id
 
         return order
@@ -87,17 +110,25 @@ class OrderManager:
         base_size = float(state.get("position_size") or 0)
         multiplier = float(signal.get("size_multiplier", 1.0))
 
-        new_size = base_size * multiplier
+        new_size = int(base_size * multiplier)
+
+        print("REENTRY SIZE:", new_size)
+
+        if new_size <= 0:
+            raise ValueError("Re-entry size <= 0")
 
         order = self.exchange.buy_market(
             symbol=symbol,
             size=new_size
         )
 
+        print("REENTRY RESPONSE:", order)
+
         order_id = self._extract_order_id(order)
+
         state["reentry_order_id"] = order_id
 
-
+        # -------------------------
         # PENDING REENTRY STATE
         # -------------------------
         state["reentry_pending"] = True
@@ -119,8 +150,14 @@ class OrderManager:
             return None
 
         if isinstance(balance_response, dict):
-            for key in ("availableMargin", "available_margin", "available", "freeMargin"):
+            for key in (
+                "availableMargin",
+                "available_margin",
+                "available",
+                "freeMargin"
+            ):
                 value = balance_response.get(key)
+
                 if value is not None:
                     try:
                         return float(value)
@@ -128,11 +165,17 @@ class OrderManager:
                         pass
 
             accounts = balance_response.get("accounts", {})
+
             if isinstance(accounts, dict):
                 flex = accounts.get("flex", {})
+
                 if isinstance(flex, dict):
-                    for key in ("availableMargin", "available_margin"):
+                    for key in (
+                        "availableMargin",
+                        "available_margin"
+                    ):
                         value = flex.get(key)
+
                         if value is not None:
                             try:
                                 return float(value)
@@ -146,7 +189,12 @@ class OrderManager:
             return None
 
         if isinstance(order_response, dict):
-            for key in ("order_id", "orderId", "uid", "id"):
+            for key in (
+                "order_id",
+                "orderId",
+                "uid",
+                "id"
+            ):
                 if key in order_response:
                     return str(order_response[key])
 
