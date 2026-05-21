@@ -59,6 +59,14 @@ def sync_state_from_exchange(exchange, state_store: StateStore):
 
         state["entry_price"] = entry_price
         state["symbol"] = matched.get("symbol")
+        # -------------------------
+        # CONFIRM REENTRY
+        # -------------------------
+        state["reentry_pending"] = False
+
+        if state.get("pending_level") is not None:
+            state["level"] = state["pending_level"]
+            state["pending_level"] = None
 
         if state.get("level") in (None, 0):
             state["level"] = 1

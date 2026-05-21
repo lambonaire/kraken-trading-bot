@@ -97,11 +97,17 @@ class OrderManager:
         order_id = self._extract_order_id(order)
         state["reentry_order_id"] = order_id
 
+
+        # PENDING REENTRY STATE
         # -------------------------
-        # LEVEL CONTROL (IMPORTANT FIX)
-        # -------------------------
-        state["last_reentry_level"] = signal.get("level", state.get("level", 1))
-        state["level"] = signal.get("next_level", state.get("level", 1) + 1)
+        state["reentry_pending"] = True
+        state["pending_level"] = signal.get("next_level")
+
+        # Prevent duplicate trigger spam
+        state["last_reentry_level"] = signal.get(
+            "level",
+            state.get("level", 1)
+        )
 
         return order
 

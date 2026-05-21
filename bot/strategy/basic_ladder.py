@@ -7,6 +7,9 @@ class BasicLadderStrategy:
     def on_tick(self, market_data, state):
         price = market_data["price"]
         symbol = self.config["symbol"]
+        # BLOCK NEW REENTRY WHILE PROCESSING
+        if state.get("reentry_pending"):
+            return None
 
         current_level = int(state.get("level") or 1)
         current_level = max(1, min(current_level, self.max_level))
