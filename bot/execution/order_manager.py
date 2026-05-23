@@ -1,8 +1,13 @@
 class OrderManager:
-    def __init__(self, exchange, state_store):
+
+    def __init__(self, exchange, state_store, strategy=None):
         self.exchange = exchange
         self.state_store = state_store
+        self.strategy = strategy
 
+    # =========================
+    # MAIN
+    # =========================
     def execute(self, signal, market_data):
         if not signal:
             return None
@@ -20,19 +25,27 @@ class OrderManager:
 
         raise ValueError(f"Unknown action: {action}")
 
-    # -------------------------
+    # =========================
     # ENTRY
-    # -------------------------
+    # =========================
     def _open_entry(self, signal, market_data):
+
         symbol = signal["symbol"]
-        margin_fraction = float(signal["margin_fraction"])
+
+        margin_fraction = float(
+            signal["margin_fraction"]
+        )
 
         balance = self.exchange.balance()
 
-        available_margin = self._extract_available_margin(balance)
+        available_margin = self._extract_available_margin(
+            balance
+        )
 
         if available_margin is None:
-            raise ValueError("Could not extract available margin")
+            raise ValueError(
+                "Could not extract available margin"
+            )
 
         price = float(market_data["price"])
 
@@ -40,28 +53,23 @@ class OrderManager:
 
         raw_size = usd_size / price
 
-        # Kraken Futures prefers integer contract sizes
         size = int(raw_size)
 
-        print("AVAILABLE MARGIN:", available_margin)
-        print("USD SIZE:", usd_size)
-        print("RAW SIZE:", raw_size)
-        print("FINAL SIZE:", size)
+        print("ENTRY SIZE:", size)
 
         if size <= 0:
-            raise ValueError("Calculated order size <= 0")
+            return None
 
-        # -------------------------
-        # PLACE ORDER
-        # -------------------------
+        # =========================
+        # MARKET ENTRY
+        # =========================
+
         order = self.exchange.buy_market(
             symbol=symbol,
             size=size
         )
 
-        print("ORDER RESPONSE:", order)
-
-
+        print("ENTRY RESPONSE:", order)
 
         order_id = self._extract_order_id(order)
 
@@ -72,12 +80,91 @@ class OrderManager:
             symbol=symbol
         )
 
+        state = self.state_store.get()
+
+        # =========================
+        # TP LIMIT
+        # =========================
+
+        tp_pct = float(
+            signal.get("tp_pct", 0.003)
+        )
+
+        tp_price = price * (1 + tp_pct)
+
+        print("TP PRICE:", tp_price)
+
+        tp_order = self.exchange.sell_limit(
+            symbol=symbol,
+            size=size,
+            price=tp_price,
+            reduce_only=True
+        )
+
+        print("TP RESPONSE:", tp_order)
+
+        tp_order_id = self._extract_order_id(
+            tp_order
+        )
+
+        state["tp_order_id"] = tp_order_id
+
+        # =========================
+        # REENTRY LIMIT BUY
+        # =========================
+
+        drop_pct = float(
+            signal.get("drop_pct", 0.01)
+        )
+
+        size_multiplier = float(
+            signal.get("size_multiplier", 1.0)
+        )
+
+        reentry_price = price * (
+            1 - drop_pct
+        )
+
+        reentry_size = int(
+            size * size_multiplier
+        )
+
+        if reentry_size <= 0:
+            reentry_size = 1
+
+        print(
+            "REENTRY LIMIT:",
+            reentry_price,
+            reentry_size
+        )
+
+        reentry_order = self.exchange.buy_limit(
+            symbol=symbol,
+            size=reentry_size,
+            price=reentry_price,
+            reduce_only=False
+        )
+
+        print(
+            "REENTRY RESPONSE:",
+            reentry_order
+        )
+
+        reentry_order_id = self._extract_order_id(
+            reentry_order
+        )
+
+        state["reentry_order_id"] = (
+            reentry_order_id
+        )
+
         return order
 
-    # -------------------------
+    # =========================
     # TAKE PROFIT
-    # -------------------------
+    # =========================
     def _take_profit(self, signal, market_data):
+
         state = self.state_store.get()
 
         symbol = signal["symbol"]
@@ -91,18 +178,15 @@ class OrderManager:
             size=size
         )
 
-        print("TP RESPONSE:", order)
-
-        order_id = self._extract_order_id(order)
-
-        state["tp_order_id"] = order_id
+        state["tp_order_id"] = self._extract_order_id(order)
 
         return order
 
-    # -------------------------
-    # RE-ENTRY
-    # -------------------------
+    # =========================
+    # REENTRY (FIXED)
+    # =========================
     def _reentry(self, signal, market_data):
+
         state = self.state_store.get()
 
         symbol = signal["symbol"]
@@ -112,90 +196,82 @@ class OrderManager:
 
         new_size = int(base_size * multiplier)
 
-        print("REENTRY SIZE:", new_size)
-
         if new_size <= 0:
-            raise ValueError("Re-entry size <= 0")
+            return None
 
-        order = self.exchange.buy_market(
+        # 🔴 CRITICAL FIX: price eerst bepalen
+        reentry_price = float(signal["reentry_price"])
+
+        state["reentry_pending"] = True
+
+        # =========================
+        # LIMIT BUY (REENTRY)
+        # =========================
+        order = self.exchange.buy_limit(
             symbol=symbol,
-            size=new_size
+            size=new_size,
+            price=reentry_price,
+            reduce_only=False
         )
 
-        print("REENTRY RESPONSE:", order)
+        state["reentry_order_id"] = self._extract_order_id(order)
 
-        order_id = self._extract_order_id(order)
+        # level update
+        state["level"] = signal.get(
+            "next_level",
+            state.get("level", 1) + 1
+        )
 
-        state["reentry_order_id"] = order_id
-
-        # -------------------------
-        # PENDING REENTRY STATE
-        # -------------------------
-        state["reentry_pending"] = True
+        state["last_reentry_level"] = state["level"]
         state["pending_level"] = signal.get("next_level")
 
-        # Prevent duplicate trigger spam
-        state["last_reentry_level"] = signal.get(
-            "level",
-            state.get("level", 1)
+        # =========================
+        # NEW TP DIRECT AFTER REENTRY
+        # =========================
+        entry_price = float(state.get("entry_price") or market_data["price"])
+        level = int(state["level"])
+
+        tp_pct = self.strategy.reentry_levels[level - 1]["take_profit_pct"]
+        tp_price = entry_price * (1 + tp_pct)
+
+        tp_order = self.exchange.sell_limit(
+            symbol=symbol,
+            size=new_size,
+            price=tp_price,
+            reduce_only=True
         )
+
+        state["tp_order_id"] = self._extract_order_id(tp_order)
+
+        state["reentry_pending"] = False
 
         return order
 
-    # -------------------------
-    # HELPERS
-    # -------------------------
-    def _extract_available_margin(self, balance_response):
-        if not balance_response:
+    # =========================
+    # HELPERS (BELANGRIJK - FIX VOOR JE ERROR)
+    # =========================
+    def _extract_available_margin(self, balance):
+
+        if not balance:
             return None
 
-        if isinstance(balance_response, dict):
-            for key in (
-                "availableMargin",
-                "available_margin",
-                "available",
-                "freeMargin"
-            ):
-                value = balance_response.get(key)
-
-                if value is not None:
-                    try:
-                        return float(value)
-                    except:
-                        pass
-
-            accounts = balance_response.get("accounts", {})
-
-            if isinstance(accounts, dict):
-                flex = accounts.get("flex", {})
-
-                if isinstance(flex, dict):
-                    for key in (
-                        "availableMargin",
-                        "available_margin"
-                    ):
-                        value = flex.get(key)
-
-                        if value is not None:
-                            try:
-                                return float(value)
-                            except:
-                                pass
-
-        return None
-
-    def _extract_order_id(self, order_response):
-        if not order_response:
+        try:
+            return float(
+                balance.get("accounts", {})
+                       .get("flex", {})
+                       .get("availableMargin", 0)
+            )
+        except:
             return None
 
-        if isinstance(order_response, dict):
-            for key in (
-                "order_id",
-                "orderId",
-                "uid",
-                "id"
-            ):
-                if key in order_response:
-                    return str(order_response[key])
+    def _extract_order_id(self, order):
+
+        if not order:
+            return None
+
+        if isinstance(order, dict):
+            for k in ("order_id", "orderId", "uid", "id"):
+                if k in order:
+                    return str(order[k])
 
         return None

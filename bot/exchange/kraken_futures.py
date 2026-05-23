@@ -181,6 +181,36 @@ def place_market_order(symbol: str, side: str, size: float):
     )
 
 
+
+def place_limit_order(
+    symbol: str,
+    side: str,
+    size: float,
+    price: float,
+    reduce_only: bool = True
+):
+
+    endpoint = "/derivatives/api/v3/sendorder"
+
+    data = {
+        "orderType": "lmt",
+        "symbol": symbol,
+        "side": side,
+        "size": str(int(size)),
+        "limitPrice": str(round(price, 6)),
+    }
+
+    if reduce_only:
+        data["reduceOnly"] = "true"
+
+    print("📤 LIMIT ORDER PAYLOAD:", data)
+
+    return private_request(
+        "POST",
+        endpoint,
+        data
+    )
+
 # =========================
 # MAIN
 # =========================

@@ -4,6 +4,7 @@ from bot.exchange.kraken_futures import (
     get_open_positions,
     get_open_orders,
     place_market_order,
+    place_limit_order,
 )
 
 
@@ -26,6 +27,10 @@ class KrakenClient:
     def positions(self):
         return get_open_positions()
 
+    def get_open_positions(self):
+        return get_open_positions()
+
+
     def open_orders(self):
         return get_open_orders()
 
@@ -45,4 +50,36 @@ class KrakenClient:
             symbol=symbol,
             side="sell",
             size=size
+        )
+
+    def sell_limit(
+        self,
+        symbol,
+        size,
+        price,
+        reduce_only=True
+    ):
+
+        return place_limit_order(
+            symbol=symbol,
+            side="sell",
+            size=size,
+            price=price,
+            reduce_only=reduce_only
+        )
+
+    def buy_limit(
+        self,
+        symbol,
+        size,
+        price,
+        reduce_only=False
+    ):
+
+        return place_limit_order(
+            symbol=symbol,
+            side="buy",
+            size=size,
+            price=price,
+            reduce_only=reduce_only
         )
