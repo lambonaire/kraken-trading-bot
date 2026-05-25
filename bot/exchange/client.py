@@ -5,6 +5,7 @@ from bot.exchange.kraken_futures import (
     get_open_orders,
     place_market_order,
     place_limit_order,
+    cancel_order,
 )
 
 
@@ -30,7 +31,6 @@ class KrakenClient:
     def get_open_positions(self):
         return get_open_positions()
 
-
     def open_orders(self):
         return get_open_orders()
 
@@ -39,6 +39,7 @@ class KrakenClient:
     # =========================
 
     def buy_market(self, symbol, size):
+
         return place_market_order(
             symbol=symbol,
             side="buy",
@@ -46,6 +47,7 @@ class KrakenClient:
         )
 
     def sell_market(self, symbol, size):
+
         return place_market_order(
             symbol=symbol,
             side="sell",
@@ -83,3 +85,11 @@ class KrakenClient:
             price=price,
             reduce_only=reduce_only
         )
+
+    # =========================
+    # CANCEL
+    # =========================
+
+    def cancel_order(self, order_id):
+
+        return cancel_order(order_id)

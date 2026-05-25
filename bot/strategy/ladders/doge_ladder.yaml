@@ -6,12 +6,12 @@ base_entry:
 
 reentry:
   - level: 1
-    drop_pct: 0.012
-    size_multiplier: 2.4
-    take_profit_pct: 0.004   # +0.4%
+    drop_pct: 0.005
+    size_multiplier: 2.0
+    take_profit_pct: 0.0025   # +0.25%
 
   - level: 2
-    drop_pct: 0.018
+    drop_pct: 0.012
     size_multiplier: 2.5
     take_profit_pct: 0.003  # +0.3%
 

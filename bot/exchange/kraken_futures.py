@@ -123,6 +123,20 @@ def get_ticker(symbol="PF_DOGEUSD"):
 def get_account_balance():
     return private_request("GET", ACCOUNTS_ENDPOINT)
 
+def cancel_order(order_id):
+
+    endpoint = "/derivatives/api/v3/cancelorder"
+
+    data = {
+        "order_id": order_id
+    }
+
+    return private_request(
+        "POST",
+        endpoint,
+        data
+    )
+
 def get_open_position():
     """
     Geeft eerste open positie terug.

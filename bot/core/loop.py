@@ -13,9 +13,10 @@ from bot.strategy.basic_ladder import BasicLadderStrategy
 from bot.execution.order_manager import OrderManager
 
 
-# -------------------------
+# =========================
 # INIT
-# -------------------------
+# =========================
+
 state_store = StateStore()
 
 config = load_ladder(
@@ -33,9 +34,10 @@ order_manager = OrderManager(
 )
 
 
-# -------------------------
+# =========================
 # MAIN LOOP
-# -------------------------
+# =========================
+
 def run_bot():
 
     print("🚀 Bot started...")
@@ -44,9 +46,9 @@ def run_bot():
 
         try:
 
-            # -------------------------
+            # =========================
             # FETCH SNAPSHOT
-            # -------------------------
+            # =========================
             snapshot = build_snapshot()
 
             ticker = snapshot.get("ticker")
@@ -55,35 +57,67 @@ def run_bot():
                 "price": float(ticker)
             }
 
-            # -------------------------
-            # EXCHANGE → LOCAL STATE
-            # -------------------------
+            # =========================
+            # SYNC POSITION STATE
+            # =========================
             sync_state_from_exchange(
                 exchange,
                 state_store
             )
 
-            # -------------------------
-            # ORDER RECONCILIATION
-            # -------------------------
+            # =========================
+            # RECONCILE ORDERS
+            # =========================
             reconcile_orders(
                 exchange,
                 state_store
             )
 
-            # -------------------------
-            # CURRENT STATE
-            # -------------------------
+            # =========================
+            # GET STATE
+            # =========================
             state = state_store.get()
 
+            # =========================
+            # REBUILD LADDER (SAFE ONCE ONLY)
+            # =========================
+            if state.get("needs_new_ladder"):
+
+                print("\nREBUILDING LADDER")
+
+                symbol = state.get("symbol")
+                position_size = float(state.get("position_size") or 0)
+                entry_price = float(state.get("entry_price") or 0)
+                level = int(state.get("level") or 1)
+
+                print("LEVEL:", level)
+                print("POSITION:", position_size)
+                print("ENTRY:", entry_price)
+
+                if symbol and position_size > 0 and entry_price > 0:
+
+                    order_manager.create_ladder_orders(
+                        symbol=symbol,
+                        entry_price=entry_price,
+                        size=position_size,
+                        level=level
+                    )
+
+                # 🔥 BELANGRIJK: meteen resetten om dubbele triggers te voorkomen
+                state["needs_new_ladder"] = False
+                state_store.state = state
+
+            # =========================
+            # CURRENT STATE
+            # =========================
             print("\n==============================")
             print("CURRENT STATE")
             print("==============================")
             print(state)
 
-            # -------------------------
+            # =========================
             # STRATEGY
-            # -------------------------
+            # =========================
             signal = strategy.on_tick(
                 market_data,
                 state
@@ -94,9 +128,9 @@ def run_bot():
             print("==============================")
             print(signal)
 
-            # -------------------------
+            # =========================
             # EXECUTION
-            # -------------------------
+            # =========================
             result = order_manager.execute(
                 signal,
                 market_data
@@ -107,9 +141,9 @@ def run_bot():
             print("==============================")
             print(result)
 
-            # -------------------------
-            # DEBUG
-            # -------------------------
+            # =========================
+            # MARKET
+            # =========================
             print("\n==============================")
             print("MARKET")
             print("==============================")
@@ -121,8 +155,9 @@ def run_bot():
             print("==============================")
 
         except Exception as e:
-
             print(f"\n[ERROR loop] {e}")
 
-        # Prevent spam loops
+        # =========================
+        # LOOP DELAY
+        # =========================
         time.sleep(2)
