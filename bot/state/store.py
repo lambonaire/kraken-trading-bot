@@ -27,15 +27,11 @@ class StateStore:
     # READ
     # =========================
 
-    def get(self, symbol: str = None):
-        if symbol:
-            return self._get_symbol(symbol)
+    def get(self, symbol: str):
+        if not symbol:
+            raise ValueError("Symbol is required for multi-bot isolation")
 
-        # ⚠️ fallback alleen voor legacy calls
-        if not self.states:
-            return {}
-
-        return next(iter(self.states.values()))
+        return self._get_symbol(symbol)
 
     # =========================
     # RESET FULL SYMBOL STATE

@@ -39,7 +39,7 @@ class OrderManager:
         level
     ):
 
-        state = self.state_store.get()
+        state = self.state_store.get(symbol)
 
         direction = getattr(
             self.strategy,
@@ -424,7 +424,7 @@ class OrderManager:
         market_data
     ):
 
-        state = self.state_store.get()
+        state = self.state_store.get(symbol)
 
         direction = getattr(
             self.strategy,

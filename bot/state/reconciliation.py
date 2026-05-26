@@ -5,7 +5,7 @@ def reconcile_orders(exchange, state_store, symbol):
     - If reentry filled and position increased: cancel old TP, mark ladder rebuild.
     """
 
-    state = state_store.get()
+    state = state_store.get(symbol)
 
     orders_response = exchange.open_orders()
     open_positions_response = exchange.positions()
