@@ -1,3 +1,4 @@
+import os
 import time
 
 from bot.exchange.kraken_futures import build_snapshot
@@ -14,14 +15,23 @@ from bot.execution.order_manager import OrderManager
 
 
 # =========================
+# ENV CONFIG
+# =========================
+
+BOT_CONFIG = os.getenv(
+    "BOT_CONFIG",
+    "bot/strategy/ladders/doge_ladder.yaml"
+)
+
+
+# =========================
 # INIT
 # =========================
 
+
 state_store = StateStore()
 
-config = load_ladder(
-    "bot/strategy/ladders/doge_ladder.yaml"
-)
+config = load_ladder(BOT_CONFIG)
 
 strategy = BasicLadderStrategy(config)
 
@@ -40,29 +50,48 @@ order_manager = OrderManager(
 
 def run_bot():
 
-    print("🚀 Bot started...")
+    print("🚀 Bot started with config:", BOT_CONFIG)
 
     while True:
 
         try:
 
             # =========================
-            # FETCH SNAPSHOT
+            # SYMBOL FIRST (FIX CRASH)
             # =========================
-            snapshot = build_snapshot()
+            config_symbol = config.get("symbol")
+
+            state = state_store.get(config_symbol)
+
+            symbol = state.get("symbol") or config_symbol
+
+            if not symbol:
+                raise ValueError("No symbol found in state or config")
+
+            # =========================
+            # SNAPSHOT
+            # =========================
+            snapshot = build_snapshot(symbol)
 
             ticker = snapshot.get("ticker")
+
+            if not ticker:
+                print("[WARNING] No ticker data")
+                time.sleep(2)
+                continue
 
             market_data = {
                 "price": float(ticker)
             }
+
 
             # =========================
             # SYNC POSITION STATE
             # =========================
             sync_state_from_exchange(
                 exchange,
-                state_store
+                state_store,
+                symbol
             )
 
             # =========================
@@ -70,31 +99,32 @@ def run_bot():
             # =========================
             reconcile_orders(
                 exchange,
-                state_store
+                state_store,
+                symbol
             )
 
             # =========================
-            # GET STATE
+            # REFRESH STATE
             # =========================
-            state = state_store.get()
+            state = state_store.get(symbol)
 
             # =========================
-            # REBUILD LADDER (SAFE ONCE ONLY)
+            # REBUILD LADDER
             # =========================
             if state.get("needs_new_ladder"):
 
                 print("\nREBUILDING LADDER")
 
-                symbol = state.get("symbol")
                 position_size = float(state.get("position_size") or 0)
                 entry_price = float(state.get("entry_price") or 0)
                 level = int(state.get("level") or 1)
 
+                print("SYMBOL:", symbol)
                 print("LEVEL:", level)
                 print("POSITION:", position_size)
                 print("ENTRY:", entry_price)
 
-                if symbol and position_size > 0 and entry_price > 0:
+                if position_size > 0 and entry_price > 0:
 
                     order_manager.create_ladder_orders(
                         symbol=symbol,
@@ -103,15 +133,14 @@ def run_bot():
                         level=level
                     )
 
-                # 🔥 BELANGRIJK: meteen resetten om dubbele triggers te voorkomen
                 state["needs_new_ladder"] = False
-                state_store.state = state
+                state_store.states[symbol] = state
 
             # =========================
-            # CURRENT STATE
+            # DEBUG STATE
             # =========================
             print("\n==============================")
-            print("CURRENT STATE")
+            print("STATE")
             print("==============================")
             print(state)
 
@@ -142,13 +171,13 @@ def run_bot():
             print(result)
 
             # =========================
-            # MARKET
+            # PRICE
             # =========================
             print("\n==============================")
-            print("MARKET")
+            print("PRICE")
             print("==============================")
 
-            print(f"Price: {ticker}")
+            print(f"{symbol}: {ticker}")
 
             print("\n==============================")
             print("LOOP COMPLETE")
@@ -157,7 +186,4 @@ def run_bot():
         except Exception as e:
             print(f"\n[ERROR loop] {e}")
 
-        # =========================
-        # LOOP DELAY
-        # =========================
         time.sleep(2)

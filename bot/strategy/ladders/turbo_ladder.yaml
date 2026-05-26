@@ -1,0 +1,31 @@
+symbol: PF_TURBOUSD
+direction: long   # 👈 DIT MISSEN WE NU
+max_level: 4
+
+base_entry:
+  margin_fraction: 0.10
+
+reentry:
+  - level: 1
+    drop_pct: 0.005
+    size_multiplier: 2.0
+    take_profit_pct: 0.0025
+
+  - level: 2
+    drop_pct: 0.012
+    size_multiplier: 2.5
+    take_profit_pct: 0.003
+
+  - level: 3
+    drop_pct: 0.10
+    size_multiplier: 1.2
+    take_profit_pct: 0.005
+
+  - level: 4
+    drop_pct: 0.17
+    size_multiplier: 2.2
+    take_profit_pct: 0.006
+
+rules:
+  exit_on_take_profit: true
+  cancel_opposite_orders: true

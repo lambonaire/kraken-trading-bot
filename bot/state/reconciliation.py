@@ -1,4 +1,4 @@
-def reconcile_orders(exchange, state_store):
+def reconcile_orders(exchange, state_store, symbol):
     """
     Reconciles open orders against the current position.
     - If TP filled and position is flat: cancel old reentry and reset.
@@ -55,7 +55,7 @@ def reconcile_orders(exchange, state_store):
             except Exception as e:
                 print("[RECONCILE] Cancel re-entry failed:", e)
 
-        state_store.clear_position()
+        state_store.clear_position(symbol)
         state["tp_order_id"] = None
         state["reentry_order_id"] = None
         state["reentry_pending"] = False

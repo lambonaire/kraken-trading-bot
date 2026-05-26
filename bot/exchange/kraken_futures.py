@@ -26,7 +26,6 @@ OPEN_POSITIONS_ENDPOINT = "/derivatives/api/v3/openpositions"
 OPEN_ORDERS_ENDPOINT = "/derivatives/api/v3/openorders"
 TICKERS_ENDPOINT = "/derivatives/api/v3/tickers"
 
-
 # =========================
 # SIGNING
 # =========================
@@ -46,7 +45,6 @@ def generate_signature(endpoint_path: str, postdata: str, nonce: str) -> str:
     ).digest()
 
     return base64.b64encode(signature).decode()
-
 
 # =========================
 # REQUEST CORE
@@ -75,126 +73,89 @@ def private_request(method: str, endpoint: str, data: dict | None = None):
         else:
             response = requests.post(url, headers=headers, data=postdata, timeout=15)
 
-        try:
-            return response.json()
-        except Exception:
-            return {
-                "error": "invalid_json",
-                "raw": response.text,
-                "status_code": response.status_code
-            }
+        return response.json()
 
     except Exception as e:
         return {"error": str(e)}
-
 
 # =========================
 # PUBLIC DATA
 # =========================
 
-def get_ticker(symbol="PF_DOGEUSD"):
+def get_ticker(symbol: str):
     url = BASE_URL + TICKERS_ENDPOINT
 
     try:
         response = requests.get(url, timeout=10)
 
         if response.status_code != 200:
-            return {"error": "ticker_http_error", "code": response.status_code}
+            return None
 
         data = response.json()
-
         tickers = data.get("tickers") or []
 
         for t in tickers:
-            if t.get("symbol") == symbol or "DOGE" in (t.get("symbol") or ""):
+            if t.get("symbol") == symbol:
                 price = t.get("markPrice") or t.get("last")
                 return float(price) if price else None
 
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return None
 
     return None
 
-
 # =========================
-# PRIVATE API WRAPPERS
+# ACCOUNT / POSITIONS
 # =========================
 
 def get_account_balance():
     return private_request("GET", ACCOUNTS_ENDPOINT)
 
-def cancel_order(order_id):
-
-    endpoint = "/derivatives/api/v3/cancelorder"
-
-    data = {
-        "order_id": order_id
-    }
-
-    return private_request(
-        "POST",
-        endpoint,
-        data
-    )
-
-def get_open_position():
-    """
-    Geeft eerste open positie terug.
-    """
-
-    response = get_open_positions()
-
-    positions = response.get("openPositions", [])
-
-    if not positions:
-        return None
-
-    return positions[0]
-
 def get_open_positions():
     return private_request("GET", OPEN_POSITIONS_ENDPOINT)
-
 
 def get_open_orders():
     return private_request("GET", OPEN_ORDERS_ENDPOINT)
 
+def cancel_order(order_id):
+    return private_request(
+        "POST",
+        "/derivatives/api/v3/cancelorder",
+        {"order_id": order_id}
+    )
 
 # =========================
-# SNAPSHOT (voor later strategie)
+# SNAPSHOT (GENERIC FIX)
 # =========================
 
-def build_snapshot():
+def build_snapshot(symbol: str):
     return {
         "timestamp": int(time.time() * 1000),
-        "ticker": get_ticker(),
+        "ticker": get_ticker(symbol),
         "accounts": get_account_balance(),
         "positions": get_open_positions(),
         "orders": get_open_orders()
     }
-
 
 # =========================
 # MARKET ORDER
 # =========================
 
 def place_market_order(symbol: str, side: str, size: float):
-
-    endpoint = "/derivatives/api/v3/sendorder"
-
-    data = {
-        "orderType": "mkt",
-        "symbol": symbol,
-        "side": side,
-        "size": size
-    }
-
     return private_request(
         "POST",
-        endpoint,
-        data
+        "/derivatives/api/v3/sendorder",
+        {
+            "orderType": "mkt",
+            "symbol": symbol,
+            "side": side,
+            "size": size
+        }
     )
 
-
+# =========================
+# LIMIT ORDER
+# =========================
 
 def place_limit_order(
     symbol: str,
@@ -203,8 +164,6 @@ def place_limit_order(
     price: float,
     reduce_only: bool = True
 ):
-
-    endpoint = "/derivatives/api/v3/sendorder"
 
     data = {
         "orderType": "lmt",
@@ -217,21 +176,8 @@ def place_limit_order(
     if reduce_only:
         data["reduceOnly"] = "true"
 
-    print("📤 LIMIT ORDER PAYLOAD:", data)
-
     return private_request(
         "POST",
-        endpoint,
+        "/derivatives/api/v3/sendorder",
         data
     )
-
-# =========================
-# MAIN
-# =========================
-
-if __name__ == "__main__":
-    print("🔥 SCRIPT STARTED")
-
-    snapshot = build_snapshot()
-
-    print(snapshot)

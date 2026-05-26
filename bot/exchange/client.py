@@ -15,7 +15,7 @@ class KrakenClient:
     # MARKET DATA
     # =========================
 
-    def ticker(self, symbol="PF_DOGEUSD"):
+    def ticker(self, symbol: str):
         return get_ticker(symbol)
 
     # =========================
@@ -39,7 +39,6 @@ class KrakenClient:
     # =========================
 
     def buy_market(self, symbol, size):
-
         return place_market_order(
             symbol=symbol,
             side="buy",
@@ -47,7 +46,6 @@ class KrakenClient:
         )
 
     def sell_market(self, symbol, size):
-
         return place_market_order(
             symbol=symbol,
             side="sell",
@@ -61,7 +59,6 @@ class KrakenClient:
         price,
         reduce_only=True
     ):
-
         return place_limit_order(
             symbol=symbol,
             side="sell",
@@ -77,7 +74,6 @@ class KrakenClient:
         price,
         reduce_only=False
     ):
-
         return place_limit_order(
             symbol=symbol,
             side="buy",
@@ -91,5 +87,4 @@ class KrakenClient:
     # =========================
 
     def cancel_order(self, order_id):
-
         return cancel_order(order_id)
