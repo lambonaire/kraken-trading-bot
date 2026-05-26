@@ -1,32 +1,38 @@
 def sync_state_from_exchange(exchange, state_store, symbol):
 
-    positions = exchange.positions()
+    positions = exchange.get_open_positions()
+
     open_positions = positions.get("openPositions", []) if positions else []
 
-    if not open_positions:
+    matching_position = None
+
+    for pos in open_positions:
+
+        if pos.get("symbol") == symbol:
+            matching_position = pos
+            break
+
+    # =========================
+    # NO POSITION
+    # =========================
+
+    if not matching_position:
+
         print("[SYNC] No matching position found")
+
         state_store.clear_position(symbol)
+
         return
 
-    # neem eerste positie
-    pos = open_positions[0]
+    # =========================
+    # POSITION FOUND
+    # =========================
 
-    try:
-        size = float(pos.get("size") or 0)
-        entry_price = float(pos.get("entryPrice") or 0)
-    except:
-        size = 0
-        entry_price = 0
+    size = float(matching_position.get("size") or 0)
+    entry_price = float(matching_position.get("entryPrice") or 0)
 
-    if size <= 0:
-        state_store.clear_position(symbol)
-        return
-
-    # update state per symbol
     state = state_store.get(symbol)
 
     state["symbol"] = symbol
     state["position_size"] = size
     state["entry_price"] = entry_price
-
-    state_store.states[symbol] = state
