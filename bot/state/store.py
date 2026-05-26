@@ -31,11 +31,14 @@ class StateStore:
         if symbol:
             return self._get_symbol(symbol)
 
-        # fallback (veilig voor oude code)
-        return next(iter(self.states.values()), {})
+        # ⚠️ fallback alleen voor legacy calls
+        if not self.states:
+            return {}
+
+        return next(iter(self.states.values()))
 
     # =========================
-    # RESET
+    # RESET FULL SYMBOL STATE
     # =========================
 
     def reset(self, symbol: str):
@@ -54,9 +57,10 @@ class StateStore:
         state["position_size"] = size
         state["entry_order_id"] = order_id
         state["level"] = 1
+        state["needs_new_ladder"] = False
 
     # =========================
-    # LEVEL
+    # LEVEL MANAGEMENT
     # =========================
 
     def increase_level(self, symbol):
@@ -72,7 +76,15 @@ class StateStore:
         state["position_size"] = size
 
     # =========================
-    # CLEAR POSITION
+    # FLAG LADDER REBUILD
+    # =========================
+
+    def trigger_ladder_rebuild(self, symbol):
+        state = self._get_symbol(symbol)
+        state["needs_new_ladder"] = True
+
+    # =========================
+    # CLEAR POSITION (FULL RESET STATE)
     # =========================
 
     def clear_position(self, symbol):
