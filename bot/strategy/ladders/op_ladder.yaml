@@ -1,16 +1,13 @@
 symbol: PF_OPUSD
 direction: long
 
-max_level: 4
-
-base_entry:
-  margin_fraction: 0.10
-
 entry:
-  sizing:
-    min_usd_size: 10
-    min_size: 50
-    size_step: 50
+  margin_fraction: 0.10
+  min_usd_size: 5
+  min_size: 10
+  size_step: 10
+
+max_level: 4
 
 reentry:
   - level: 1

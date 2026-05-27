@@ -37,17 +37,17 @@ def run_bot():
     # =========================
     strategy = BasicLadderStrategy(config)
 
+    sizing_engine = SizingEngine(strategy)
+
     # =========================
     # ORDER MANAGER
     # =========================
-    order_manager = OrderManager(exchange, state_store, strategy)
-
-    # =========================
-    # SIZING ENGINE (FIX)
-    # =========================
-    sizing_engine = SizingEngine(strategy)
-
-    order_manager.set_sizing_engine(sizing_engine)
+    order_manager = OrderManager(
+        exchange=exchange,
+        state_store=state_store,
+        strategy=strategy,
+        sizing=sizing_engine
+    )
 
     # =========================
     # MAIN LOOP

@@ -1,11 +1,13 @@
 symbol: PF_XRPUSD
 direction: short
 
-max_level: 4
-
-base_entry:
+entry:
   margin_fraction: 0.10
+  min_usd_size: 5
+  min_size: 1
+  size_step: 1
 
+max_level: 4
 
 reentry:
   - level: 1

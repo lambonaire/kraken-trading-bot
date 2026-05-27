@@ -1,23 +1,23 @@
-symbol: PF_XBTUSD
-direction: short
+symbol: PF_ETHUSD
+direction: long
 
 entry:
   margin_fraction: 0.10
   min_usd_size: 5
-  min_size: 1
-  size_step: 1
+  min_size: 0.01
+  size_step: 0.01
 
 max_level: 4
 
 reentry:
   - level: 1
     drop_pct: 0.008
-    size_multiplier: 2.0
+    size_multiplier: 1.0
     take_profit_pct: 0.0025
 
   - level: 2
     drop_pct: 0.016
-    size_multiplier: 1.5
+    size_multiplier: 2.5
     take_profit_pct: 0.003
 
   - level: 3

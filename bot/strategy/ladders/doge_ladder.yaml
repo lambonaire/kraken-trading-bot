@@ -1,16 +1,13 @@
 symbol: PF_DOGEUSD
 direction: long
 
-max_level: 4
-
-base_entry:
-  margin_fraction: 0.10
-
 entry:
-  sizing:
-    min_usd_size: 20
-    min_size: 100
-    size_step: 100
+  margin_fraction: 0.10
+  min_usd_size: 5
+  min_size: 1
+  size_step: 1
+
+max_level: 4
 
 reentry:
   - level: 1

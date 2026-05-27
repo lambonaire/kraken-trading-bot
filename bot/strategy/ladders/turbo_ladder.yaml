@@ -1,16 +1,13 @@
 symbol: PF_TURBOUSD
 direction: long
 
-max_level: 4
-
-base_entry:
-  margin_fraction: 0.10
-
 entry:
-  sizing:
-    min_usd_size: 20
-    min_size: 500
-    size_step: 500
+  margin_fraction: 0.10
+  min_usd_size: 5
+  min_size: 500
+  size_step: 500
+
+max_level: 4
 
 reentry:
   - level: 1
