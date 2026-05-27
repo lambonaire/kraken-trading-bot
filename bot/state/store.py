@@ -20,6 +20,10 @@ class StateStore:
                 "reentry_order_id": None,
                 "reentry_pending": False,
                 "needs_new_ladder": False,
+                "tp_price": None,
+                "tp_size": None,
+                "reentry_price": None,
+                "reentry_size": None,
             }
         return self.states[symbol]
 

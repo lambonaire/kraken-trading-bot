@@ -6,6 +6,12 @@ max_level: 4
 base_entry:
   margin_fraction: 0.10
 
+entry:
+  sizing:
+    min_usd_size: 20
+    min_size: 100
+    size_step: 100
+
 reentry:
   - level: 1
     drop_pct: 0.008

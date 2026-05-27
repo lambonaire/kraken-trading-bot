@@ -34,6 +34,9 @@ class KrakenClient:
     def open_orders(self):
         return get_open_orders()
 
+    def get_price(self, symbol: str):
+        return self.ticker(symbol)
+
     # =========================
     # EXECUTION
     # =========================
