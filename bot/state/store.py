@@ -25,11 +25,13 @@ class StateStore:
             "tp_order_id": None,
             "reentry_order_id": None,
             "reentry_pending": False,
-            "needs_new_ladder": False,
+            "needs_new_ladder": True,
+            "ladder_active": False,
             "tp_price": None,
             "tp_size": None,
             "reentry_price": None,
             "reentry_size": None,
+            "last_reconciled_position_size": 0.0,
         }
 
     def _get_symbol(self, symbol: str):
@@ -151,11 +153,13 @@ class StateStore:
         state["tp_order_id"] = None
         state["reentry_order_id"] = None
         state["reentry_pending"] = False
-        state["needs_new_ladder"] = False
+        state["needs_new_ladder"] = True
+        state["ladder_active"] = False
         state["tp_price"] = None
         state["tp_size"] = None
         state["reentry_price"] = None
         state["reentry_size"] = None
+        state["last_reconciled_position_size"] = 0.0
 
         self.states[symbol] = state
         return state

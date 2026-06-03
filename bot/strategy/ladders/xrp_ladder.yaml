@@ -1,34 +1,23 @@
 symbol: PF_XRPUSD
-direction: short
+direction: buy
 
 entry:
-  margin_fraction: 0.10
-  min_usd_size: 5
-  min_size: 1
-  size_step: 1
+  margin_fraction: 0.1
 
-max_level: 4
-
-reentry:
-  - level: 1
-    drop_pct: 0.008
-    size_multiplier: 2.0
-    take_profit_pct: 0.0025
-
-  - level: 2
-    drop_pct: 0.016
-    size_multiplier: 2.5
+reentry_levels:
+  - drop_pct: 0.005
     take_profit_pct: 0.003
+    size_multiplier: 1.5
+  - drop_pct: 0.01
+    take_profit_pct: 0.004
+    size_multiplier: 2.5
+  - drop_pct: 0.10
+    take_profit_pct: 0.003
+    size_multiplier: 1.0
+  - drop_pct: 0.2
+    take_profit_pct: 0.004
+    size_multiplier: 2.5
 
-  - level: 3
-    drop_pct: 0.07
-    size_multiplier: 1.2
-    take_profit_pct: 0.005
-
-  - level: 4
-    drop_pct: 0.17
-    size_multiplier: 1.3
-    take_profit_pct: 0.006
 
 rules:
   exit_on_take_profit: true

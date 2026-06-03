@@ -1,4 +1,5 @@
 def sync_state_from_exchange(exchange, state_store, symbol):
+
     state = state_store.get(symbol)
 
     positions_response = exchange.positions()
@@ -23,55 +24,35 @@ def sync_state_from_exchange(exchange, state_store, symbol):
             break
 
     # =========================
-    # NO POSITION
+    # SOFT STATE RESET ONLY
     # =========================
     if not current_pos:
         print("[SYNC] no position -> soft reset")
 
         state["position_size"] = 0.0
         state["entry_price"] = None
-
-        state["needs_new_ladder"] = True
-        state["ladder_active"] = False
         state["level"] = 1
 
+        # DO NOT TOUCH LADDER FLAGS
         return state
 
-
     # =========================
-    # POSITION FOUND
+    # UPDATE FROM EXCHANGE
     # =========================
     try:
         size = float(current_pos.get("size") or 0)
-    except Exception:
+    except:
         size = 0.0
 
-    # 🔴 CRITICAL FIX: prefer LAST EXECUTION PRICE if available
-    raw_entry = (
-        current_pos.get("entryPrice")
-        or current_pos.get("price")
-        or current_pos.get("avgEntryPrice")
-    )
-
     try:
-        entry_price = float(raw_entry) if raw_entry else None
-    except Exception:
+        entry_price = float(current_pos.get("entryPrice"))
+    except:
         entry_price = None
 
     state["position_size"] = size
 
     if entry_price and entry_price > 0:
-        old_entry = state.get("entry_price")
-
         state["entry_price"] = entry_price
 
-    if old_entry != entry_price:
-        print("[SYNC] NEW FILL DETECTED → ACTIVATE LADDER")
-
-        state["needs_new_ladder"] = False
-        state["ladder_active"] = True
-        state["reentry_pending"] = False
-
-    # ❌ DO NOT RESET LEVEL
-
+    # IMPORTANT: ladder state stays intact
     return state

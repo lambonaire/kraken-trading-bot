@@ -11,12 +11,14 @@ class SizingEngine:
         entry_cfg = getattr(self.strategy, "entry", {})
         risk_cfg = getattr(self.strategy, "risk", {})
 
-        # -------------------------
-        # SAFE MARGIN EXTRACTION
-        # -------------------------
         available_margin = self._extract_margin(balance)
+
         if available_margin is None:
-            print("[SIZING] no margin")
+            print("[SIZING] invalid balance")
+            return 0
+
+        if not price or price <= 0:
+            print("[SIZING] invalid price")
             return 0
 
         margin_fraction = float(
@@ -26,41 +28,49 @@ class SizingEngine:
         usd_size = available_margin * margin_fraction
 
         min_usd = float(entry_cfg.get("min_usd_size", 0))
+
         if usd_size < min_usd:
+            print("[SIZING] usd_size too small")
             return 0
 
-        raw_size = usd_size / price
+        raw_size = usd_size / float(price)
 
-        # -------------------------
-        # STEP LOGIC
-        # -------------------------
         step = int(entry_cfg.get("size_step", 1))
+        if step < 1:
+            step = 1
+
         size = math.floor(raw_size / step) * step
 
+        # 🔴 FIX: NO ZERO SIZES EVER
+        if size <= 0:
+            size = step
+
         min_size = int(entry_cfg.get("min_size", 1))
+
+        # soft floor (not kill)
         if size < min_size:
-            return 0
+            size = min_size
 
-        # -------------------------
-        # TURBO MODE
-        # -------------------------
-        if "TURBO" in symbol:
-            size = (size // 100) * 100
-            if size <= 0:
-                size = 100
-
-        # -------------------------
-        # MAX CAP
-        # -------------------------
         max_size = risk_cfg.get("max_position_size")
         if max_size:
             size = min(size, int(max_size))
+            print("[SIZING] symbol =", symbol)
+            print("[SIZING] price =", price)
+            print("[SIZING] raw_size =", raw_size)
+            print("[SIZING] final_size =", size)
 
         return size
 
     def _extract_margin(self, balance):
+
         if not balance:
             return None
+
+        if isinstance(balance, dict) and "availableMargin" in balance:
+            try:
+                return float(balance["availableMargin"])
+            except:
+                return None
 
         try:
             return float(

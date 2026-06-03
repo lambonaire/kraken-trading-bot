@@ -1,24 +1,30 @@
-def reconcile_orders(exchange, state_store, symbol):
+from bot.execution.ladder_reconciler import LadderReconciler
+
+
+def reconcile_orders(exchange, state_store, strategy, symbol):
     """
     Reconciles open orders against the current position.
-    Kraken is truth, state is follower.
+
+    Rules:
+    - flat position -> clear state and cancel ladder orders
+    - position size changed -> rebuild ladder
+    - TP/reentry missing -> repair ladder
+    - true reentry fill -> increment level and rebuild ladder
     """
 
     state = state_store.get(symbol)
 
     orders_response = exchange.open_orders()
-    open_positions_response = exchange.positions()
+    positions_response = exchange.positions()
 
     live_ids = set()
 
     # =========================
     # OPEN ORDERS
     # =========================
-
     open_orders = []
-
     if orders_response:
-        open_orders = orders_response.get("openOrders", [])
+        open_orders = orders_response.get("openOrders", []) or []
 
         for o in open_orders:
             oid = (
@@ -33,12 +39,12 @@ def reconcile_orders(exchange, state_store, symbol):
     # =========================
     # MATCH CURRENT POSITION FOR THIS SYMBOL
     # =========================
-
-    current_pos_size = 0.0
     current_pos = None
+    current_pos_size = 0.0
+    current_pos_entry_price = None
 
-    if open_positions_response:
-        open_positions = open_positions_response.get("openPositions", [])
+    if positions_response:
+        open_positions = positions_response.get("openPositions", []) or []
 
         for pos in open_positions:
             pos_symbol = (
@@ -58,13 +64,23 @@ def reconcile_orders(exchange, state_store, symbol):
             except Exception:
                 current_pos_size = 0.0
 
+            raw_entry = (
+                current_pos.get("entryPrice")
+                or current_pos.get("price")
+                or current_pos.get("avgEntryPrice")
+            )
+
+            try:
+                current_pos_entry_price = float(raw_entry) if raw_entry else None
+            except Exception:
+                current_pos_entry_price = None
+
     tp_id = state.get("tp_order_id")
     re_id = state.get("reentry_order_id")
 
     # =========================
     # FLAT POSITION -> HARD CLEAN
     # =========================
-
     if current_pos_size <= 0:
         print("[RECONCILE] Position is flat -> cleaning state for", symbol)
 
@@ -85,42 +101,66 @@ def reconcile_orders(exchange, state_store, symbol):
         state_store.clear_position(symbol)
         return state_store.get(symbol)
 
-    # =========================
-    # TP FILLED -> RESET
-    # =========================
+    prev_size = float(state.get("last_reconciled_position_size") or 0.0)
+    size_changed = abs(current_pos_size - prev_size) > 1e-9
 
-    if tp_id and str(tp_id) not in live_ids and current_pos_size <= 0:
-        print("[RECONCILE] TP filled for", symbol)
-        state_store.clear_position(symbol)
-        return state_store.get(symbol)
+    tp_missing = (not tp_id) or (str(tp_id) not in live_ids)
+    re_missing = (not re_id) or (str(re_id) not in live_ids)
 
-    # =========================
-    # REENTRY FILLED -> REBUILD LADDER
-    # =========================
-
-    if re_id and str(re_id) not in live_ids and current_pos_size > 0:
-        print("[RECONCILE] Re-entry filled -> rebuild ladder for", symbol)
-
-        if tp_id:
-            try:
-                print("[RECONCILE] Cancelling old TP:", tp_id)
-                exchange.cancel_order(tp_id)
-            except Exception as e:
-                print("[RECONCILE] TP cancel failed:", e)
-
-        state["tp_order_id"] = None
-        state["tp_price"] = None
-        state["tp_size"] = None
-
-        state["reentry_order_id"] = None
-        state["reentry_price"] = None
-        state["reentry_size"] = None
-
-        state["reentry_pending"] = False
-        state["needs_new_ladder"] = True
-
-        state["level"] = int(state.get("level") or 1) + 1
-
+    entry_price = current_pos_entry_price or state.get("entry_price")
+    if entry_price is None:
+        print("[RECONCILE] missing entry_price -> skip rebuild for", symbol)
+        state["position_size"] = current_pos_size
+        state["last_reconciled_position_size"] = current_pos_size
         return state
 
+    level = int(state.get("level") or 1)
+
+    # True reentry fill heuristic:
+    # reentry order vanished AND position size increased vs last reconciliation
+    if re_id and str(re_id) not in live_ids and current_pos_size > prev_size + 1e-9:
+        print("[RECONCILE] Re-entry filled -> rebuild ladder for", symbol)
+        level = min(level + 1, int(getattr(strategy, "max_level", level)))
+        state["level"] = level
+        state["needs_new_ladder"] = True
+        state["ladder_active"] = True
+        state["reentry_pending"] = False
+
+        reconciler = LadderReconciler(exchange, state_store, strategy)
+        reconciler.reconcile(
+            symbol=symbol,
+            entry_price=entry_price,
+            position_size=current_pos_size,
+            level=level,
+        )
+
+        state["last_reconciled_position_size"] = current_pos_size
+        state["last_reconciled_level"] = level
+        return state
+
+    # Manual add / TP missing / reentry missing => repair at same level
+    if size_changed or tp_missing or re_missing:
+        print("[RECONCILE] Position changed or ladder incomplete -> rebuild ladder for", symbol)
+
+        state["position_size"] = current_pos_size
+        state["entry_price"] = entry_price
+        state["level"] = level
+        state["needs_new_ladder"] = True
+        state["ladder_active"] = True
+        state["reentry_pending"] = False
+
+        reconciler = LadderReconciler(exchange, state_store, strategy)
+        reconciler.reconcile(
+            symbol=symbol,
+            entry_price=entry_price,
+            position_size=current_pos_size,
+            level=level,
+        )
+
+        state["last_reconciled_position_size"] = current_pos_size
+        state["last_reconciled_level"] = level
+        return state
+
+    state["last_reconciled_position_size"] = current_pos_size
+    state["last_reconciled_level"] = level
     return state

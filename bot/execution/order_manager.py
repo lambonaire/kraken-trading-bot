@@ -1,460 +1,130 @@
 class OrderManager:
-
-    def __init__(self, exchange, state_store, strategy=None, sizing=None):
+    def __init__(self, exchange, state_store, strategy, sizing):
         self.exchange = exchange
         self.state_store = state_store
         self.strategy = strategy
         self.sizing = sizing
 
-    # ==================================================
-    # MAIN EXECUTION
-    # ==================================================
+        from bot.execution.ladder_reconciler import LadderReconciler
+        self.reconciler = LadderReconciler(exchange, state_store, strategy)
 
     def execute(self, signal, market_data):
+        print("[ORDER MANAGER] signal =", signal)
+        print("[ORDER MANAGER] market_data =", market_data)
 
         if not signal:
+            print("[ORDER MANAGER] no signal")
             return None
 
-        action = signal.get("action")
-
-        if action == "OPEN_ENTRY":
-            return self._open_entry(signal, market_data)
-
-        if action == "TAKE_PROFIT":
-            return self._take_profit(signal, market_data)
-
-        if action == "REENTRY":
-            return self._reentry(signal, market_data)
-
-        return None
-
-    # ==================================================
-    # OPEN ENTRY
-    # ==================================================
-
-    def _open_entry(self, signal, market_data):
-
-        symbol = signal["symbol"]
-        price = float(market_data["price"])
-
-        if not self.sizing:
-            raise ValueError("Sizing engine not injected")
-
-        balance = self.exchange.balance()
-
-        size = self.sizing.calculate_size(
-            symbol=symbol,
-            price=price,
-            signal=signal,
-            balance=balance
-        )
-
-        print("[ENTRY SIZE]", size)
-
-        if size <= 0:
-            return None
-
-        direction = getattr(self.strategy, "direction", "long")
-
-        # -------------------------
-        # MARKET ENTRY
-        # -------------------------
-
-        order = (
-            self.exchange.sell_market
-            if direction == "short"
-            else self.exchange.buy_market
-        )(
-            symbol=symbol,
-            size=size
-        )
-
-        print("[ENTRY RESPONSE]", order)
-
-        order_id = self._extract_order_id(order)
-
-        # -------------------------
-        # STATE UPDATE
-        # -------------------------
-
-        self.state_store.set_entry(
-            symbol=symbol,
-            price=price,
-            size=size,
-            order_id=order_id
-        )
-
-        self.state_store.set_level(
-            symbol,
-            1
-        )
-
-        # -------------------------
-        # CREATE LADDER
-        # -------------------------
-
-        self.create_ladder_orders(
-            symbol=symbol,
-            entry_price=price,
-            size=size,
-            level=1
-        )
-
-        return order
-
-    # ==================================================
-    # CREATE LADDER ORDERS
-    # ==================================================
-
-    def create_ladder_orders(
-        self,
-        symbol,
-        entry_price,
-        size,
-        level
-    ):
-
+        symbol = signal.get("symbol")
         state = self.state_store.get(symbol)
 
-        direction = getattr(
-            self.strategy,
-            "direction",
-            "long"
-        )
+        if not market_data:
+            print("[ORDER MANAGER] missing market_data")
+            return None
 
-        cfg = self.strategy.reentry_levels[
-            level - 1
-        ]
+        price = market_data.get("price")
+        print("[ORDER MANAGER] price =", price)
 
-        # -------------------------
-        # CANCEL OLD ORDERS
-        # -------------------------
+        if price is None:
+            print("[ORDER MANAGER] missing price -> skip")
+            return None
 
-        for key in [
-            "tp_order_id",
-            "reentry_order_id"
-        ]:
+        # =========================
+        # ENTRY LOGIC
+        # =========================
+        if signal.get("action") == "OPEN_ENTRY":
+            print("[ORDER MANAGER] fetching balance")
+            balance = self.exchange.get_account_balance()
+            print("[ORDER MANAGER] balance =", balance)
 
-            old_order_id = state.get(key)
-
-            if old_order_id:
-
-                try:
-                    self.exchange.cancel_order(
-                        old_order_id
-                    )
-
-                    print(
-                        "[CANCELLED]",
-                        old_order_id
-                    )
-
-                except Exception as e:
-
-                    print(
-                        "[CANCEL ERROR]",
-                        e
-                    )
-
-        # ==================================================
-        # TAKE PROFIT
-        # ==================================================
-
-        tp_pct = float(
-            cfg.get(
-                "take_profit_pct",
-                0.003
-            )
-        )
-
-        tp_price = (
-            entry_price * (1 - tp_pct)
-            if direction == "short"
-            else entry_price * (1 + tp_pct)
-        )
-
-        tp_price = self._round_price(
-            symbol,
-            tp_price
-        )
-
-        tp_order = (
-            self.exchange.buy_limit
-            if direction == "short"
-            else self.exchange.sell_limit
-        )(
-            symbol=symbol,
-            size=size,
-            price=tp_price,
-            reduce_only=True
-        )
-
-        print("[TP RESPONSE]", tp_order)
-
-        tp_status = (
-            tp_order
-            .get("sendStatus", {})
-            .get("status")
-        )
-
-        if tp_status == "placed":
-
-            self.state_store.set_tp(
+            print("[ORDER MANAGER] calculating size")
+            size = self.sizing.calculate_size(
                 symbol=symbol,
-                order_id=self._extract_order_id(tp_order),
-                price=tp_price,
-                size=size
+                price=price,
+                signal=signal,
+                balance=balance,
             )
+            print("[ORDER MANAGER] size =", size)
 
-        else:
+            if size <= 0:
+                print("[ORDER] skip entry size 0")
+                return None
 
             print(
-                "[TP FAILED]",
-                tp_status
+                "[ORDER MANAGER] sending entry order",
+                signal.get("side"),
+                size,
             )
 
-        # ==================================================
-        # MAX LEVEL STOP
-        # ==================================================
-
-        if level >= self.strategy.max_level:
-
-            print("[MAX LEVEL REACHED]")
-
-            self.state_store.set_reentry(
+            order = self.exchange.place_market_order(
                 symbol=symbol,
-                order_id=None,
-                price=None,
-                size=None
+                side=signal.get("side"),
+                size=size,
             )
 
-            return
+            print("[ORDER MANAGER] order response =", order)
 
-        # ==================================================
-        # REENTRY
-        # ==================================================
+            if not order:
+                print("[ORDER MANAGER] entry order not placed")
+                return None
 
-        drop_pct = float(
-            cfg.get(
-                "drop_pct",
-                0.01
-            )
-        )
+            if order.get("sendStatus", {}).get("status") != "placed":
+                print("[ORDER MANAGER] entry order not placed")
+                return order
 
-        size_mult = float(
-            cfg.get(
-                "size_multiplier",
-                1.0
-            )
-        )
+            order_id = order["sendStatus"]["order_id"]
 
-        reentry_price = (
-            entry_price * (1 + drop_pct)
-            if direction == "short"
-            else entry_price * (1 - drop_pct)
-        )
+            # Extract actual fill(s) from Kraken response
+            events = order["sendStatus"].get("orderEvents", []) or []
+            fills = [e for e in events if e.get("type") == "EXECUTION"]
 
-        reentry_price = self._round_price(
-            symbol,
-            reentry_price
-        )
+            total_amount = 0.0
+            weighted_price_sum = 0.0
 
-        reentry_size = int(
-            size * size_mult
-        )
+            for fill in fills:
+                fill_price = float(fill.get("price") or 0)
+                fill_amount = float(fill.get("amount") or 0)
 
-        # -------------------------
-        # TURBO SAFE
-        # -------------------------
+                if fill_price > 0 and fill_amount > 0:
+                    total_amount += fill_amount
+                    weighted_price_sum += fill_price * fill_amount
 
-        if "TURBO" in symbol:
+            if total_amount > 0:
+                fill_price = weighted_price_sum / total_amount
+                fill_size = total_amount
+            else:
+                fill_price = float(price)
+                fill_size = float(size)
 
-            reentry_size = (
-                int(reentry_size / 100) * 100
-            )
-
-            if reentry_size <= 0:
-                reentry_size = 100
-
-        reentry_order = (
-            self.exchange.sell_limit
-            if direction == "short"
-            else self.exchange.buy_limit
-        )(
-            symbol=symbol,
-            size=reentry_size,
-            price=reentry_price,
-            reduce_only=False
-        )
-
-        print(
-            "[REENTRY RESPONSE]",
-            reentry_order
-        )
-
-        reentry_status = (
-            reentry_order
-            .get("sendStatus", {})
-            .get("status")
-        )
-
-        if reentry_status == "placed":
-
-            self.state_store.set_reentry(
+            self.state_store.set_entry(
                 symbol=symbol,
-                order_id=self._extract_order_id(
-                    reentry_order
-                ),
-                price=reentry_price,
-                size=reentry_size
+                price=fill_price,
+                size=fill_size,
+                order_id=order_id,
             )
 
-        else:
+            state["needs_new_ladder"] = False
+            state["ladder_active"] = True
+            state["reentry_pending"] = False
+            state["level"] = 1
+            state["last_reconciled_level"] = 0
 
             print(
-                "[REENTRY FAILED]",
-                reentry_status
+                "[ORDER MANAGER] entry filled; building ladder "
+                f"fill_price={fill_price} fill_size={fill_size} order_id={order_id}"
             )
 
-    # ==================================================
-    # TAKE PROFIT EXECUTION
-    # ==================================================
-
-    def _take_profit(
-        self,
-        signal,
-        market_data
-    ):
-
-        symbol = signal["symbol"]
-
-        state = self.state_store.get(symbol)
-
-        size = float(
-            state.get(
-                "position_size"
-            ) or 0
-        )
-
-        if size <= 0:
-            return None
-
-        direction = getattr(
-            self.strategy,
-            "direction",
-            "long"
-        )
-
-        order = (
-            self.exchange.buy_market
-            if direction == "short"
-            else self.exchange.sell_market
-        )(
-            symbol=symbol,
-            size=size
-        )
-
-        print(
-            "[TP MARKET RESPONSE]",
-            order
-        )
-
-        self.state_store.clear_position(
-            symbol
-        )
-
-        return order
-
-    # ==================================================
-    # REENTRY EXECUTION
-    # ==================================================
-
-    def _reentry(
-        self,
-        signal,
-        market_data
-    ):
-
-        symbol = signal["symbol"]
-
-        state = self.state_store.get(symbol)
-
-        current_level = int(
-            state.get("level") or 1
-        )
-
-        next_level = current_level + 1
-
-        self.state_store.set_level(
-            symbol,
-            next_level
-        )
-
-        self.state_store.trigger_ladder_rebuild(
-            symbol
-        )
-
-        print(
-            "[REENTRY LEVEL]",
-            next_level
-        )
-
-        return True
-
-    # ==================================================
-    # PRICE ROUNDING
-    # ==================================================
-
-    def _round_price(
-        self,
-        symbol,
-        price
-    ):
-
-        if "XBT" in symbol:
-            return round(price, 1)
-
-        if "ETH" in symbol:
-            return round(price, 2)
-
-        if "XRP" in symbol:
-            return round(price, 5)
-
-        if "DOGE" in symbol:
-            return round(price, 5)
-
-        if "TURBO" in symbol:
-            return round(price, 6)
-
-        return round(price, 6)
-
-    # ==================================================
-    # ORDER ID EXTRACTION
-    # ==================================================
-
-    def _extract_order_id(
-        self,
-        order_response
-    ):
-
-        if not order_response:
-            return None
-
-        if isinstance(order_response, dict):
-
-            if order_response.get("order_id"):
-                return str(
-                    order_response["order_id"]
-                )
-
-            send = order_response.get(
-                "sendStatus",
-                {}
+            # Build TP + reentry immediately from the confirmed fill
+            self.reconciler.reconcile(
+                symbol=symbol,
+                entry_price=fill_price,
+                position_size=fill_size,
+                level=1,
             )
 
-            if send.get("order_id"):
-                return str(
-                    send["order_id"]
-                )
+            state["last_reconciled_position_size"] = fill_size
+
+            return order
 
         return None
