@@ -1,22 +1,23 @@
-symbol: PF_XRPUSD
+symbol: PF_FETUSD
 direction: buy
 
 entry:
   margin_fraction: 0.075
 
 reentry_levels:
-  - drop_pct: 0.005
+  - drop_pct: 0.006
     take_profit_pct: 0.003
     size_multiplier: 1.5
-  - drop_pct: 0.01
+  - drop_pct: 0.024
     take_profit_pct: 0.004
-    size_multiplier: 2.5
-  - drop_pct: 0.10
+    size_multiplier: 1.4
+  - drop_pct: 0.08
     take_profit_pct: 0.003
     size_multiplier: 1.0
-  - drop_pct: 0.2
+  - drop_pct: 0.16
     take_profit_pct: 0.004
-    size_multiplier: 2.5
+    size_multiplier: 1.5
+
 
 
 rules:
