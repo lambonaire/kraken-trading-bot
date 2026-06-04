@@ -19,6 +19,22 @@ class OrderManager:
         symbol = signal.get("symbol")
         state = self.state_store.get(symbol)
 
+        # HARD SAFETY
+
+        if signal.get("action") == "OPEN_ENTRY":
+
+            if float(state.get("position_size", 0)) > 0:
+                print("[SAFETY] position already open -> block entry")
+                return None
+
+        if state.get("ladder_active"):
+            print("[SAFETY] ladder active -> block entry")
+            return None
+
+        if state.get("needs_new_ladder") is False:
+            print("[SAFETY] ladder not reset -> block entry")
+            return None
+
         if not market_data:
             print("[ORDER MANAGER] missing market_data")
             return None
