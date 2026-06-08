@@ -118,6 +118,16 @@ def reconcile_orders(exchange, state_store, strategy, symbol):
 
     # True reentry fill heuristic:
     # reentry order vanished AND position size increased vs last reconciliation
+
+    print(
+        "[DEBUG LEVEL]",
+        "level=", level,
+        "prev_size=", prev_size,
+        "current_size=", current_pos_size,
+        "re_id=", re_id,
+        "re_exists=", str(re_id) in live_ids if re_id else False,
+    )
+
     if re_id and str(re_id) not in live_ids and current_pos_size > prev_size + 1e-9:
         print("[RECONCILE] Re-entry filled -> rebuild ladder for", symbol)
         level = min(level + 1, int(getattr(strategy, "max_level", level)))

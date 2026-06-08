@@ -15,49 +15,67 @@ class SizingEngine:
 
         if available_margin is None:
             print("[SIZING] invalid balance")
-            return 0
+            return 0.0
 
         if not price or price <= 0:
             print("[SIZING] invalid price")
-            return 0
+            return 0.0
 
+        # =========================
+        # CONFIG (fractional-safe)
+        # =========================
         margin_fraction = float(
             signal.get("margin_fraction", entry_cfg.get("margin_fraction", 0.1))
         )
 
+        min_usd = float(entry_cfg.get("min_usd_size", 0.0))
+
+        step = float(entry_cfg.get("size_step", 0.001))   # ETH-friendly default
+        if step <= 0:
+            step = 0.001
+
+        min_size = float(entry_cfg.get("min_size", 0.001))
+
+        max_size = risk_cfg.get("max_position_size")
+        max_size = float(max_size) if max_size else None
+
+        # =========================
+        # CORE CALCULATION
+        # =========================
         usd_size = available_margin * margin_fraction
 
-        min_usd = float(entry_cfg.get("min_usd_size", 0))
-
         if usd_size < min_usd:
-            print("[SIZING] usd_size too small")
-            return 0
+            print("[SIZING] usd_size below min_usd -> skip")
+            return 0.0
 
         raw_size = usd_size / float(price)
 
-        step = int(entry_cfg.get("size_step", 1))
-        if step < 1:
-            step = 1
-
+        # round DOWN to step (fractional-safe)
         size = math.floor(raw_size / step) * step
 
-        # 🔴 FIX: NO ZERO SIZES EVER
+        # =========================
+        # SAFETY GATES (IMPORTANT)
+        # =========================
         if size <= 0:
-            size = step
+            print("[SIZING] size too small after step rounding -> skip")
+            return 0.0
 
-        min_size = int(entry_cfg.get("min_size", 1))
-
-        # soft floor (not kill)
         if size < min_size:
-            size = min_size
+            print("[SIZING] size below min_size -> skip")
+            return 0.0
 
-        max_size = risk_cfg.get("max_position_size")
         if max_size:
-            size = min(size, int(max_size))
-            print("[SIZING] symbol =", symbol)
-            print("[SIZING] price =", price)
-            print("[SIZING] raw_size =", raw_size)
-            print("[SIZING] final_size =", size)
+            size = min(size, max_size)
+
+        # clean float precision noise (Kraken-friendly)
+        size = round(size, 8)
+
+        print("[SIZING] symbol =", symbol)
+        print("[SIZING] price =", price)
+        print("[SIZING] available_margin =", available_margin)
+        print("[SIZING] usd_size =", usd_size)
+        print("[SIZING] raw_size =", raw_size)
+        print("[SIZING] final_size =", size)
 
         return size
 
@@ -66,12 +84,7 @@ class SizingEngine:
         if not balance:
             return None
 
-        if isinstance(balance, dict) and "availableMargin" in balance:
-            try:
-                return float(balance["availableMargin"])
-            except:
-                return None
-
+        # Kraken flex multi-collateral format
         try:
             return float(
                 balance.get("accounts", {})
