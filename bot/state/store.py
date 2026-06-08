@@ -21,17 +21,25 @@ class StateStore:
             "position_size": 0.0,
             "entry_price": None,
             "level": 1,
+
             "entry_order_id": None,
             "tp_order_id": None,
             "reentry_order_id": None,
+
             "reentry_pending": False,
             "needs_new_ladder": True,
             "ladder_active": False,
+
             "tp_price": None,
             "tp_size": None,
+
             "reentry_price": None,
             "reentry_size": None,
+
             "last_reconciled_position_size": 0.0,
+
+            # NEW
+            "missing_position_count": 0,
         }
 
     def _get_symbol(self, symbol: str):

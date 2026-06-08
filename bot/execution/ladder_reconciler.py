@@ -1,4 +1,5 @@
 from bot.exchange.kraken_futures import get_tick_size, round_to_tick
+import math
 
 
 class LadderReconciler:
@@ -10,13 +11,14 @@ class LadderReconciler:
     - Order cleanup
     """
 
-    def __init__(self, exchange, state_store, strategy):
+    def __init__(self, exchange, state_store, strategy, market_specs=None):
         if strategy is None:
             raise ValueError("strategy is required for LadderReconciler")
 
         self.exchange = exchange
         self.state_store = state_store
         self.strategy = strategy
+        self.market_specs = market_specs
 
     def reconcile(self, symbol, entry_price=None, position_size=None, level=None):
 
@@ -121,7 +123,7 @@ class LadderReconciler:
             return state
 
         # =========================
-        # REENTRY (FRACTIONAL SAFE)
+        # REENTRY (STEP SAFE FIX)
         # =========================
         drop_pct = float(level_cfg.get("drop_pct", 0.01))
         size_mult = float(level_cfg.get("size_multiplier", 1.0))
@@ -135,30 +137,39 @@ class LadderReconciler:
 
         reentry_price = round_to_tick(reentry_price_raw, tick)
 
-        # 🔴 FIX: NO INT, NO FORCE TO 1
-        reentry_size = round(live_position_size * size_mult, 8)
+        # =========================
+        # 🔥 FIX: USE MARKET STEP IF AVAILABLE
+        # =========================
+        spec = self.market_specs.get(symbol) if self.market_specs else {}
+        step = float(spec.get("size_step", 1.0))
+        min_spec_size = float(spec.get("min_size", 1.0))
 
-        min_reentry_size = float(level_cfg.get("min_size", 0.001))
+        raw_size = live_position_size * size_mult
+
+        # step rounding (CRITICAL FIX)
+        reentry_size = math.floor(raw_size / step) * step
+        reentry_size = round(reentry_size, 8)
+
+        min_reentry_size = max(
+            float(level_cfg.get("min_size", 0.001)),
+            min_spec_size
+        )
 
         print(
-            f"[DEBUG REENTRY] raw={reentry_price_raw} "
+            f"[DEBUG REENTRY] raw_price={reentry_price_raw} "
             f"price={reentry_price} "
+            f"raw_size={raw_size} "
+            f"step={step} "
             f"size={reentry_size}"
         )
 
-        # safety gate instead of forcing 1
+        # safety gate
         if reentry_size <= 0:
             print("[REENTRY] size <= 0 -> skip")
-            state["reentry_order_id"] = None
-            state["reentry_price"] = None
-            state["reentry_size"] = None
             return state
 
         if reentry_size < min_reentry_size:
             print("[REENTRY] below min_size -> skip")
-            state["reentry_order_id"] = None
-            state["reentry_price"] = None
-            state["reentry_size"] = None
             return state
 
         reentry_order = (

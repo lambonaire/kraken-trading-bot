@@ -1,3 +1,5 @@
+import time
+
 class BasicLadderStrategy:
     def __init__(self, config):
         self.config = config
@@ -33,24 +35,28 @@ class BasicLadderStrategy:
         current_level = max(1, min(current_level, self.max_level))
 
         entry_cfg = self.config.get("entry", {})
+        now = time.time()
 
-        # =========================================================
-        # 🔥 CRITICAL FIX 1: BLOCK ENTRY LOOP IF WE ARE ALREADY IN POSITION
-        # =========================================================
-        if state.get("position_size", 0) > 0:
+        # block while reconciliation / sync cooldown is active
+        if state.get("reconciling", False):
             return None
 
-        # =========================================================
-        # 🔥 CRITICAL FIX 2: DO NOT RE-ENTER IF LADDER IS STILL ACTIVE
-        # (THIS WAS YOUR MAIN BUG)
-        # =========================================================
-        if state.get("ladder_active"):
+        if state.get("entry_order_pending", False):
             return None
 
-        # =========================================================
-        # 🔥 CRITICAL FIX 3: ONLY ALLOW ENTRY WHEN LADDER IS RESET/READY
-        # =========================================================
-        if state.get("needs_new_ladder") is False:
+        if now < float(state.get("flat_cooldown_until", 0) or 0):
+            return None
+
+        # do not open if there is already a live position
+        if float(state.get("position_size", 0) or 0) > 0:
+            return None
+
+        # do not open if ladder is already active
+        if state.get("ladder_active", False):
+            return None
+
+        # only open when ladder must be rebuilt
+        if not state.get("needs_new_ladder", False):
             return None
 
         level_cfg = self.reentry_levels[current_level - 1]

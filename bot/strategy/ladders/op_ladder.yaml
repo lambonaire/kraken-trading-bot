@@ -2,21 +2,21 @@ symbol: PF_OPUSD
 direction: buy
 
 entry:
-  margin_fraction: 0.075
+  margin_fraction: 0.025
 
 reentry_levels:
-  - drop_pct: 0.016
-    take_profit_pct: 0.004
+  - drop_pct: 0.001
+    take_profit_pct: 0.001
+    size_multiplier: 1.5
+  - drop_pct: 0.0015
+    take_profit_pct: 0.0015
     size_multiplier: 2.0
-  - drop_pct: 0.034
-    take_profit_pct: 0.004
-    size_multiplier: 2.0
-  - drop_pct: 0.08
-    take_profit_pct: 0.003
+  - drop_pct: 0.002
+    take_profit_pct: 0.002
     size_multiplier: 2.5
-  - drop_pct: 0.16
-    take_profit_pct: 0.004
-    size_multiplier: 2.0
+  - drop_pct: 0.0025
+    take_profit_pct: 0.0025
+    size_multiplier: 3.0
 
 
 

@@ -135,6 +135,8 @@ def reconcile_orders(exchange, state_store, strategy, symbol):
         state["needs_new_ladder"] = True
         state["ladder_active"] = True
         state["reentry_pending"] = False
+        state["position_size"] = current_pos_size
+        state["entry_price"] = entry_price
 
         reconciler = LadderReconciler(exchange, state_store, strategy)
         reconciler.reconcile(

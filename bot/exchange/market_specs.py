@@ -1,25 +1,40 @@
 import time
 
+from bot.exchange.kraken_futures import get_instruments
+
 
 class MarketSpecs:
-
-    def __init__(self, kraken_client):
-        self.kraken = kraken_client
+    def __init__(self):
         self.cache = {}
         self.last_update = 0
         self.ttl = 300  # 5 min cache
 
     def refresh(self):
         """
-        Fetch instrument specs from Kraken.
-        NO hardcoding allowed.
+        Fetch instrument specs from Kraken futures module.
         """
-        data = self.kraken.get_futures_instruments()
+
+        data = get_instruments()
+
+        instruments = []
+
+        if isinstance(data, dict):
+            instruments = data.get("instruments", [])
+        elif isinstance(data, list):
+            instruments = data
+        else:
+            print("[MarketSpecs] invalid response format")
+            return
 
         specs = {}
 
-        for item in data.get("instruments", []):
-            symbol = item["symbol"]
+        for item in instruments:
+            if not isinstance(item, dict):
+                continue
+
+            symbol = item.get("symbol")
+            if not symbol:
+                continue
 
             specs[symbol] = {
                 "symbol": symbol,
@@ -27,11 +42,14 @@ class MarketSpecs:
                 "min_size": float(item.get("minOrderSize", 1)),
                 "size_step": float(item.get("orderSizeIncrement", 1)),
                 "max_size": float(item.get("maxOrderSize", 1e9)),
-                "type": "futures"
+                "tick_size": float(item.get("tickSize", 0.0)) if item.get("tickSize") else 0.0,
+                "type": "futures",
             }
 
         self.cache = specs
         self.last_update = time.time()
+
+        print(f"[MarketSpecs] loaded {len(specs)} instruments")
 
     def get(self, symbol):
         if time.time() - self.last_update > self.ttl:
@@ -42,5 +60,7 @@ class MarketSpecs:
             "contract_size": 1,
             "min_size": 1,
             "size_step": 1,
-            "max_size": 1e9
+            "max_size": 1e9,
+            "tick_size": 0.0,
+            "type": "unknown",
         })

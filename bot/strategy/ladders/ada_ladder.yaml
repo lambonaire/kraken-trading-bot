@@ -1,22 +1,22 @@
 symbol: PF_ADAUSD
-direction: buy
+direction: sell
 
 entry:
-  margin_fraction: 0.05
+  margin_fraction: 0.075
 
 reentry_levels:
-  - drop_pct: 0.006
+  - drop_pct: 0.018
     take_profit_pct: 0.003
-    size_multiplier: 1.2
+    size_multiplier: 1.01
   - drop_pct: 0.034
     take_profit_pct: 0.004
     size_multiplier: 2.4
-  - drop_pct: 0.09
+  - drop_pct: 0.08
     take_profit_pct: 0.003
-    size_multiplier: 1.0
-  - drop_pct: 0.16
+    size_multiplier: 1.8
+  - drop_pct: 0.165
     take_profit_pct: 0.004
-    size_multiplier: 1.5
+    size_multiplier: 3.5
 
 
 
